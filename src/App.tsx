@@ -3,7 +3,7 @@ import { ApiConnect } from './components/ApiConnect';
 import { NeedsAttention } from './components/NeedsAttention';
 import { AllCampaigns } from './components/AllCampaigns';
 import { useGetKlar } from './hooks/useGetKlar';
-import { DateRange, PlatformFilter, StatusFilter, SortBy, AttributionModel, ATTRIBUTION_LABELS } from './types';
+import { DateRange, PlatformFilter, StatusFilter, SortBy, AttributionModel, ATTRIBUTION_LABELS, AttributionWindow, WINDOW_LABELS, DateBreakdown, DATE_BREAKDOWN_LABELS } from './types';
 import { isActive, getComparisonStats } from './lib/comparison';
 import { LayoutDashboard, Lock, ChevronDown } from 'lucide-react';
 
@@ -61,7 +61,9 @@ function SortDropdown({ value, onChange }: { value: SortBy; onChange: (v: SortBy
 function App() {
   const [unlocked, setUnlocked] = useState(false);
   const [attributionModel, setAttributionModel] = useState<AttributionModel>('default');
-  const { campaigns, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null, attributionModel);
+  const [attrWindow, setAttrWindow] = useState<AttributionWindow>('unlimited');
+  const [dateBreakdown, setDateBreakdown] = useState<DateBreakdown>('order');
+  const { campaigns, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null, attributionModel, attrWindow, dateBreakdown);
 
   const [dateRange, setDateRange] = useState<DateRange>('7v7');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
@@ -168,6 +170,34 @@ function App() {
               >
                 {(Object.keys(ATTRIBUTION_LABELS) as AttributionModel[]).map(k => (
                   <option key={k} value={k}>{ATTRIBUTION_LABELS[k]}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Attribution window */}
+            <div className="relative shrink-0">
+              <select
+                value={attrWindow}
+                onChange={e => setAttrWindow(e.target.value as AttributionWindow)}
+                className="appearance-none bg-slate-800 border border-slate-700/60 text-slate-300 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 hover:border-slate-600 transition-colors"
+              >
+                {(Object.keys(WINDOW_LABELS) as AttributionWindow[]).map(k => (
+                  <option key={k} value={k}>{WINDOW_LABELS[k]}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+
+            {/* Date breakdown */}
+            <div className="relative shrink-0">
+              <select
+                value={dateBreakdown}
+                onChange={e => setDateBreakdown(e.target.value as DateBreakdown)}
+                className="appearance-none bg-slate-800 border border-slate-700/60 text-slate-300 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 hover:border-slate-600 transition-colors"
+              >
+                {(Object.keys(DATE_BREAKDOWN_LABELS) as DateBreakdown[]).map(k => (
+                  <option key={k} value={k}>{DATE_BREAKDOWN_LABELS[k]}</option>
                 ))}
               </select>
               <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />

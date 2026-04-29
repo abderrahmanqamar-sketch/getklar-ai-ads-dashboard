@@ -4,8 +4,11 @@ export interface ComparisonStats {
   spend: number;
   grossRevenue: number;
   netRevenue: number;
-  poas: number;  // grossRevenue / spend
-  apoas: number; // netRevenue  / spend
+  cm2: number;
+  acm2: number;
+  roas: number;  // netRevenue / spend
+  poas: number;  // cm2        / spend
+  apoas: number; // acm2       / spend
   ctr: number;
   cpc: number;
   cpm: number;
@@ -15,19 +18,23 @@ export interface ComparisonStats {
 }
 
 function aggregate(points: DailyDataPoint[]): ComparisonStats {
-  let spend = 0, grossRevenue = 0, netRevenue = 0, impressions = 0, clicks = 0, conversions = 0;
+  let spend = 0, grossRevenue = 0, netRevenue = 0, cm2 = 0, acm2 = 0;
+  let impressions = 0, clicks = 0, conversions = 0;
   for (const p of points) {
     spend        += p.spend;
     grossRevenue += p.grossRevenue;
     netRevenue   += p.netRevenue;
+    cm2          += p.cm2;
+    acm2         += p.acm2;
     impressions  += p.impressions;
     clicks       += p.clicks;
     conversions  += p.conversions;
   }
   return {
-    spend, grossRevenue, netRevenue, impressions, clicks, conversions,
-    poas:  spend > 0       ? grossRevenue / spend : 0,
-    apoas: spend > 0       ? netRevenue   / spend : 0,
+    spend, grossRevenue, netRevenue, cm2, acm2, impressions, clicks, conversions,
+    roas:  spend > 0       ? netRevenue / spend : 0,
+    poas:  spend > 0       ? cm2        / spend : 0,
+    apoas: spend > 0       ? acm2       / spend : 0,
     ctr:   impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc:   clicks > 0      ? spend / clicks : 0,
     cpm:   impressions > 0 ? (spend / impressions) * 1000 : 0,
@@ -53,7 +60,7 @@ function generateDates(endDate: string, n: number): string[] {
 }
 
 function emptyDay(date: string): DailyDataPoint {
-  return { date, spend: 0, grossRevenue: 0, netRevenue: 0, impressions: 0, clicks: 0, conversions: 0, ctr: 0, cpc: 0, cpm: 0, poas: 0, apoas: 0 };
+  return { date, spend: 0, grossRevenue: 0, netRevenue: 0, cm2: 0, acm2: 0, impressions: 0, clicks: 0, conversions: 0, ctr: 0, cpc: 0, cpm: 0, roas: 0, poas: 0, apoas: 0 };
 }
 
 export function getComparisonStats(campaign: Campaign, range: DateRange): RangeResult {
@@ -89,11 +96,14 @@ export function getComparisonStats(campaign: Campaign, range: DateRange): RangeR
       spend:        prev.spend,
       grossRevenue: prev.grossRevenue,
       netRevenue:   prev.netRevenue,
+      cm2:          prev.cm2,
+      acm2:         prev.acm2,
       impressions:  prev.impressions,
       clicks:       prev.clicks,
       conversions:  prev.conversions,
-      poas:         prev.roas,
-      apoas:        prev.spend > 0 ? prev.netRevenue / prev.spend : 0,
+      roas:         prev.roas,
+      poas:         prev.spend > 0 ? prev.cm2  / prev.spend : 0,
+      apoas:        prev.spend > 0 ? prev.acm2 / prev.spend : 0,
       ctr:          prev.ctr,
       cpc:          prev.clicks > 0      ? prev.spend / prev.clicks : 0,
       cpm:          prev.impressions > 0 ? (prev.spend / prev.impressions) * 1000 : 0,

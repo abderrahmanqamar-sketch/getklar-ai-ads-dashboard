@@ -5,23 +5,28 @@ export interface PeriodStats {
   conversions: number;
   grossRevenue: number;
   netRevenue: number;
-  roas: number; // grossRevenue / spend = POAS
+  cm2: number;
+  acm2: number;
+  roas: number; // netRevenue / spend
   ctr: number;
 }
 
 export interface DailyDataPoint {
-  date: string; // yyyy-mm-dd
+  date: string;
   spend: number;
   impressions: number;
   clicks: number;
   conversions: number;
-  grossRevenue: number; // grossRevenue/spend = POAS
-  netRevenue: number;   // netRevenue/spend  = aPOAS
+  grossRevenue: number;
+  netRevenue: number;   // = ROAS numerator (attributed revenue)
+  cm2: number;          // Contribution Margin 2 = POAS numerator
+  acm2: number;         // Attributed CM2       = aPOAS numerator
   ctr: number;
   cpc: number;
   cpm: number;
-  poas: number;  // grossRevenue / spend
-  apoas: number; // netRevenue  / spend
+  roas: number;  // netRevenue  / spend
+  poas: number;  // cm2         / spend
+  apoas: number; // acm2        / spend
 }
 
 export interface Campaign {
@@ -34,7 +39,9 @@ export interface Campaign {
   conversions: number;
   grossRevenue: number;
   netRevenue: number;
-  roas: number; // POAS = grossRevenue / spend
+  cm2: number;
+  acm2: number;
+  roas: number; // netRevenue / spend
   ctr: number;
   cpc: number;
   cpm: number;
@@ -75,6 +82,20 @@ export const ATTRIBUTION_LABELS: Record<AttributionModel, string> = {
   any_click:     'Any Click',
   u_shape:       'U-Shape',
   time_decay:    'Time Decay',
+};
+
+export type AttributionWindow = 'unlimited' | '1_day' | '7_day' | '28_day';
+export const WINDOW_LABELS: Record<AttributionWindow, string> = {
+  unlimited: 'Unlimited',
+  '1_day':   '1 Day',
+  '7_day':   '7 Days',
+  '28_day':  '28 Days',
+};
+
+export type DateBreakdown = 'order' | 'touch';
+export const DATE_BREAKDOWN_LABELS: Record<DateBreakdown, string> = {
+  order: 'Order Date',
+  touch: 'Touch Date',
 };
 
 export const BUCKET_LABELS: Record<BucketType, string> = {

@@ -75,9 +75,10 @@ export function computeAlerts(campaign: Campaign, range: DateRange): MetricAlert
 
   const add = (a: MetricAlert | null) => { if (a) alerts.push(a); };
 
-  add(check('POAS',    delta(current.poas,         previous.poas),         t.poasOrange,    t.poasRed,    'negative-bad'));
-  add(check('aPOAS',   delta(current.apoas,        previous.apoas),        t.poasOrange,    t.poasRed,    'negative-bad'));
-  add(check('Revenue', delta(current.grossRevenue, previous.grossRevenue), t.revenueOrange, t.revenueRed, 'negative-bad'));
+  add(check('ROAS',    delta(current.roas,       previous.roas),       t.poasOrange,    t.poasRed,    'negative-bad'));
+  add(check('POAS',    delta(current.poas,       previous.poas),       t.poasOrange,    t.poasRed,    'negative-bad'));
+  add(check('aPOAS',   delta(current.apoas,      previous.apoas),      t.poasOrange,    t.poasRed,    'negative-bad'));
+  add(check('Revenue', delta(current.netRevenue, previous.netRevenue), t.revenueOrange, t.revenueRed, 'negative-bad'));
   add(check('Spend',   delta(current.spend,   previous.spend),   t.spendOrange,   t.spendRed,   'both-bad'));
   add(check('CPM',     delta(current.cpm,     previous.cpm),     t.diagOrange,    t.diagRed,    'positive-bad'));
   add(check('CPC',     delta(current.cpc,     previous.cpc),     t.diagOrange,    t.diagRed,    'positive-bad'));

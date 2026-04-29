@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Campaign, Insight, AttributionModel } from '../types';
+import { Campaign, Insight, AttributionModel, AttributionWindow, DateBreakdown } from '../types';
 import { fetchCampaigns } from '../lib/getklar';
 import { generateInsights } from '../lib/gemini';
 
-export function useGetKlar(apiKey: string | null, model: AttributionModel = 'default') {
+export function useGetKlar(
+  apiKey: string | null,
+  model: AttributionModel = 'default',
+  attrWindow: AttributionWindow = 'unlimited',
+  dateBreakdown: DateBreakdown = 'order',
+) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,7 +22,7 @@ export function useGetKlar(apiKey: string | null, model: AttributionModel = 'def
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchCampaigns(apiKey, model);
+        const data = await fetchCampaigns(apiKey, model, attrWindow, dateBreakdown);
         if (!isMounted) return;
         
         // After fetching campaigns, analyze them with Gemini
@@ -43,7 +48,7 @@ export function useGetKlar(apiKey: string | null, model: AttributionModel = 'def
     loadData();
 
     return () => { isMounted = false; }
-  }, [apiKey, model]);
+  }, [apiKey, model, attrWindow, dateBreakdown]);
 
   return { campaigns, insights, loading, error };
 }

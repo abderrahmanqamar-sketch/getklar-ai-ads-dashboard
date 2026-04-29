@@ -1,4 +1,4 @@
-import { Campaign, DailyDataPoint, BucketType, AttributionModel } from '../types';
+import { Campaign, DailyDataPoint, BucketType, AttributionModel, AttributionWindow, DateBreakdown } from '../types';
 
 // Store token in memory locally to avoid re-fetching on every component mount
 let cachedAccessToken: string | null = null;
@@ -42,11 +42,20 @@ async function rateLimitedFetch(url: string, headers: Record<string, string>): P
   return response.json();
 }
 
-async function fetchAttributionPeriod(accessToken: string, startDate: Date, endDate: Date, model: AttributionModel): Promise<any[]> {
-  const url = new URL(window.location.origin + '/api/getklar/public/attribution');
+async function fetchAttributionPeriod(
+  accessToken: string,
+  startDate: Date,
+  endDate: Date,
+  model: AttributionModel,
+  window: AttributionWindow,
+  dateBreakdown: DateBreakdown,
+): Promise<any[]> {
+  const url = new URL(globalThis.location.origin + '/api/getklar/public/attribution');
   url.searchParams.append('startDate', formatDate(startDate));
   url.searchParams.append('endDate', formatDate(endDate));
   if (model !== 'default') url.searchParams.append('metric', model);
+  url.searchParams.append('window', window);
+  url.searchParams.append('date_breakdown', dateBreakdown);
 
   return rateLimitedFetch(url.toString(), { 'Authorization': `Bearer ${accessToken}` });
 }
@@ -118,17 +127,9 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
     if (!campaigns[id].dailyMap[date]) {
       campaigns[id].dailyMap[date] = {
         date,
-        spend: 0,
-        impressions: 0,
-        clicks: 0,
-        conversions: 0,
-        grossRevenue: 0,
-        netRevenue: 0,
-        ctr: 0,
-        cpc: 0,
-        cpm: 0,
-        poas: 0,
-        apoas: 0,
+        spend: 0, impressions: 0, clicks: 0, conversions: 0,
+        grossRevenue: 0, netRevenue: 0, cm2: 0, acm2: 0,
+        ctr: 0, cpc: 0, cpm: 0, roas: 0, poas: 0, apoas: 0,
       };
     }
 
@@ -139,6 +140,8 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
     dp.conversions  += row.orders       || 0;
     dp.grossRevenue += row.grossRevenue || 0;
     dp.netRevenue   += row.netRevenue   || 0;
+    dp.cm2          += row.cm2          || 0;
+    dp.acm2         += row.acm2         || 0;
   }
 
   // Calculate derived metrics per day
@@ -146,10 +149,11 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
     for (const date of Object.keys(campaigns[campId].dailyMap)) {
       const dp = campaigns[campId].dailyMap[date];
       dp.ctr   = dp.impressions > 0 ? (dp.clicks / dp.impressions) * 100 : 0;
-      dp.cpc   = dp.clicks > 0     ? dp.spend / dp.clicks : 0;
+      dp.cpc   = dp.clicks > 0      ? dp.spend / dp.clicks : 0;
       dp.cpm   = dp.impressions > 0 ? (dp.spend / dp.impressions) * 1000 : 0;
-      dp.poas  = dp.spend > 0      ? dp.grossRevenue / dp.spend : 0;
-      dp.apoas = dp.spend > 0      ? dp.netRevenue   / dp.spend : 0;
+      dp.roas  = dp.spend > 0       ? dp.netRevenue / dp.spend : 0;
+      dp.poas  = dp.spend > 0       ? dp.cm2        / dp.spend : 0;
+      dp.apoas = dp.spend > 0       ? dp.acm2       / dp.spend : 0;
     }
   }
 
@@ -157,7 +161,8 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
 }
 
 function aggregateStats(dailyPoints: DailyDataPoint[]) {
-  let spend = 0, impressions = 0, clicks = 0, conversions = 0, grossRevenue = 0, netRevenue = 0;
+  let spend = 0, impressions = 0, clicks = 0, conversions = 0;
+  let grossRevenue = 0, netRevenue = 0, cm2 = 0, acm2 = 0;
   for (const dp of dailyPoints) {
     spend        += dp.spend;
     impressions  += dp.impressions;
@@ -165,17 +170,24 @@ function aggregateStats(dailyPoints: DailyDataPoint[]) {
     conversions  += dp.conversions;
     grossRevenue += dp.grossRevenue;
     netRevenue   += dp.netRevenue;
+    cm2          += dp.cm2;
+    acm2         += dp.acm2;
   }
   return {
-    spend, impressions, clicks, conversions, grossRevenue, netRevenue,
-    roas: spend > 0 ? grossRevenue / spend : 0, // POAS (gross)
+    spend, impressions, clicks, conversions, grossRevenue, netRevenue, cm2, acm2,
+    roas: spend > 0 ? netRevenue / spend : 0,
     ctr:  impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc:  clicks > 0 ? spend / clicks : 0,
     cpm:  impressions > 0 ? (spend / impressions) * 1000 : 0,
   };
 }
 
-export async function fetchCampaigns(refreshToken: string, model: AttributionModel = 'default'): Promise<Campaign[]> {
+export async function fetchCampaigns(
+  refreshToken: string,
+  model: AttributionModel = 'default',
+  attrWindow: AttributionWindow = 'unlimited',
+  dateBreakdown: DateBreakdown = 'order',
+): Promise<Campaign[]> {
   if (!refreshToken) {
     throw new Error('GetKlar API Refresh Token is required');
   }
@@ -196,12 +208,12 @@ export async function fetchCampaigns(refreshToken: string, model: AttributionMod
 
   // Rate limit: 2 requests per 30 seconds
   // Auth counted as request #1, so we can do one attribution call right away
-  const currentRaw = await fetchAttributionPeriod(accessToken, currentStartDate, currentEndDate, model);
+  const currentRaw = await fetchAttributionPeriod(accessToken, currentStartDate, currentEndDate, model, attrWindow, dateBreakdown);
 
   // Wait 16 seconds before the second attribution request to respect rate limit
   await new Promise(resolve => setTimeout(resolve, 16000));
 
-  const prevRaw = await fetchAttributionPeriod(accessToken, prevStartDate, prevEndDate, model);
+  const prevRaw = await fetchAttributionPeriod(accessToken, prevStartDate, prevEndDate, model, attrWindow, dateBreakdown);
 
   // Build daily data from current period
   const currentDaily = buildDailyData(currentRaw);
@@ -240,6 +252,8 @@ export async function fetchCampaigns(refreshToken: string, model: AttributionMod
       conversions: currStats.conversions,
       grossRevenue: currStats.grossRevenue,
       netRevenue: currStats.netRevenue,
+      cm2: currStats.cm2,
+      acm2: currStats.acm2,
       roas: currStats.roas,
       ctr: currStats.ctr,
       cpc: currStats.cpc,
@@ -249,11 +263,13 @@ export async function fetchCampaigns(refreshToken: string, model: AttributionMod
       period: {
         current: {
           spend: currStats.spend, impressions: currStats.impressions, clicks: currStats.clicks,
-          conversions: currStats.conversions, grossRevenue: currStats.grossRevenue, netRevenue: currStats.netRevenue, roas: currStats.roas, ctr: currStats.ctr
+          conversions: currStats.conversions, grossRevenue: currStats.grossRevenue, netRevenue: currStats.netRevenue,
+          cm2: currStats.cm2, acm2: currStats.acm2, roas: currStats.roas, ctr: currStats.ctr,
         },
         previous: {
           spend: prevStats.spend, impressions: prevStats.impressions, clicks: prevStats.clicks,
-          conversions: prevStats.conversions, grossRevenue: prevStats.grossRevenue, netRevenue: prevStats.netRevenue, roas: prevStats.roas, ctr: prevStats.ctr
+          conversions: prevStats.conversions, grossRevenue: prevStats.grossRevenue, netRevenue: prevStats.netRevenue,
+          cm2: prevStats.cm2, acm2: prevStats.acm2, roas: prevStats.roas, ctr: prevStats.ctr,
         }
       }
     });

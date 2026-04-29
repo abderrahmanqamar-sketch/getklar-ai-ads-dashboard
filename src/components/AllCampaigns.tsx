@@ -24,13 +24,14 @@ interface MetricDef {
 }
 
 const DELTA_METRICS: MetricDef[] = [
-  { label: 'Revenue', current: s => s.grossRevenue, previous: s => s.grossRevenue, format: fmtEuro, positiveGood: true  },
-  { label: 'Spend',   current: s => s.spend,        previous: s => s.spend,        format: fmtEuro, positiveGood: null  },
-  { label: 'POAS',    current: s => s.poas,         previous: s => s.poas,         format: fmtPoas, positiveGood: true  },
-  { label: 'aPOAS',   current: s => s.apoas,        previous: s => s.apoas,        format: fmtPoas, positiveGood: true  },
-  { label: 'CPM',     current: s => s.cpm,          previous: s => s.cpm,          format: fmtCpm,  positiveGood: false },
-  { label: 'CPC',     current: s => s.cpc,          previous: s => s.cpc,          format: fmtCpc,  positiveGood: false },
-  { label: 'CTR',     current: s => s.ctr,          previous: s => s.ctr,          format: fmtCtr,  positiveGood: true  },
+  { label: 'Revenue', current: s => s.netRevenue, previous: s => s.netRevenue, format: fmtEuro, positiveGood: true  },
+  { label: 'Spend',   current: s => s.spend,      previous: s => s.spend,      format: fmtEuro, positiveGood: null  },
+  { label: 'ROAS',    current: s => s.roas,        previous: s => s.roas,       format: fmtPoas, positiveGood: true  },
+  { label: 'POAS',    current: s => s.poas,        previous: s => s.poas,       format: fmtPoas, positiveGood: true  },
+  { label: 'aPOAS',   current: s => s.apoas,       previous: s => s.apoas,      format: fmtPoas, positiveGood: true  },
+  { label: 'CPM',     current: s => s.cpm,         previous: s => s.cpm,        format: fmtCpm,  positiveGood: false },
+  { label: 'CPC',     current: s => s.cpc,         previous: s => s.cpc,        format: fmtCpc,  positiveGood: false },
+  { label: 'CTR',     current: s => s.ctr,         previous: s => s.ctr,        format: fmtCtr,  positiveGood: true  },
 ];
 
 // ─── Chart config ─────────────────────────────────────────────────────────────
@@ -248,7 +249,7 @@ function CampaignRow({
 }) {
   const result  = getComparisonStats(campaign, dateRange);
   const active  = isActive(campaign);
-  const poasDelta = delta(result.current.poas, result.previous.poas);
+  const poasDelta = delta(result.current.roas, result.previous.roas);
   const poasSign  = poasDelta > 0 ? '+' : '';
   const poasClr   = poasDelta > 0 ? 'text-emerald-400' : poasDelta < 0 ? 'text-red-400' : 'text-slate-500';
 
@@ -283,9 +284,9 @@ function CampaignRow({
             <div className="text-slate-200 font-medium">{fmtEuro(result.current.spend)}</div>
           </div>
           <div className="text-right">
-            <div className="text-slate-400">POAS</div>
+            <div className="text-slate-400">ROAS</div>
             <div className={`font-semibold ${poasClr}`}>
-              {fmtPoas(result.current.poas)}
+              {fmtPoas(result.current.roas)}
               <span className="text-[10px] ml-1 opacity-80">({poasSign}{poasDelta.toFixed(0)}%)</span>
             </div>
           </div>
