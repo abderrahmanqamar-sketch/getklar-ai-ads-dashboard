@@ -10,7 +10,7 @@ async function getAccessToken(refreshToken: string): Promise<string> {
     return cachedAccessToken;
   }
 
-  const response = await fetch('/api/getklar/public/auth/token', {
+  const response = await fetch('https://api.getklar.com/public/auth/token', {
     method: 'POST',
     headers: {
       'token': refreshToken
@@ -43,7 +43,7 @@ async function rateLimitedFetch(url: string, headers: Record<string, string>): P
 }
 
 async function fetchAttributionPeriod(accessToken: string, startDate: Date, endDate: Date): Promise<any[]> {
-  const url = new URL(window.location.origin + '/api/getklar/public/attribution');
+  const url = new URL('https://api.getklar.com/public/attribution');
   url.searchParams.append('startDate', formatDate(startDate));
   url.searchParams.append('endDate', formatDate(endDate));
 
