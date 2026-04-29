@@ -45,6 +45,7 @@ function aggregateDailyAcrossCampaigns(campaigns: Campaign[]): DailyDataPoint[] 
           ctr: 0,
           cpc: 0,
           cpm: 0,
+          poas: 0,
         };
       }
       dateMap[dp.date].spend += dp.spend;
@@ -108,7 +109,7 @@ function MiniChart({ data, config }: { data: DailyDataPoint[]; config: ChartConf
                 fontSize: '12px',
                 color: '#e2e8f0',
               }}
-              formatter={(value: number) => [config.format(value), config.label]}
+              formatter={(value) => [config.format(typeof value === 'number' ? value : 0), config.label]}
             />
             <Line
               type="monotone"

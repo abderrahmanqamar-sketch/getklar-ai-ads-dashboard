@@ -25,7 +25,7 @@ async function getAccessToken(refreshToken: string): Promise<string> {
   cachedAccessToken = data.accessToken;
   tokenExpiresAt = Date.now() + (data.expiresIn || 300000);
 
-  return cachedAccessToken;
+  return data.accessToken;
 }
 
 function formatDate(date: Date) {

@@ -124,8 +124,8 @@ function MiniTrendChart({
             <YAxis {...axisProps} width={44} tickFormatter={format} />
             <Tooltip
               {...tooltipStyle}
-              formatter={(value: number, name: string) => [
-                format(value),
+              formatter={(value, name) => [
+                format(typeof value === 'number' ? value : 0),
                 name === dataKey ? label : `${label} (prev)`,
               ]}
             />
