@@ -13,11 +13,11 @@ import { LayoutDashboard, LogOut, ChevronDown, ChevronRight } from 'lucide-react
 
 type TabView = 'overview' | 'campaigns' | 'meta';
 
+const GETKLAR_TOKEN = import.meta.env.VITE_GETKLAR_REFRESH_TOKEN as string;
+
 function App() {
-  const [apiKey, setApiKey] = useState<string | null>(
-    import.meta.env.VITE_GETKLAR_REFRESH_TOKEN || null
-  );
-  const { campaigns, insights, loading, error } = useGetKlar(apiKey);
+  const [unlocked, setUnlocked] = useState(false);
+  const { campaigns, insights, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null);
   const [activeTab, setActiveTab] = useState<TabView>('overview');
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [platformFilter, setPlatformFilter] = useState<string>('all');
@@ -37,8 +37,8 @@ function App() {
 
   const collapseAll = () => setExpandedCampaigns(new Set());
 
-  if (!apiKey) {
-    return <ApiConnect onConnect={setApiKey} />;
+  if (!unlocked) {
+    return <ApiConnect onConnect={() => setUnlocked(true)} />;
   }
 
   // Group campaigns by bucket (excluding branding for the main views)
@@ -90,7 +90,7 @@ function App() {
           </div>
 
           <button 
-            onClick={() => setApiKey(null)}
+            onClick={() => setUnlocked(false)}
             className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700"
           >
             <LogOut size={16} />
@@ -109,7 +109,7 @@ function App() {
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-6 rounded-2xl flex flex-col items-center max-w-lg mx-auto mt-20">
             <p className="mb-6 font-medium text-center">{error}</p>
             <button 
-              onClick={() => setApiKey(null)}
+              onClick={() => setUnlocked(false)}
               className="px-6 py-2.5 bg-red-500/20 hover:bg-red-500/30 rounded-xl transition-colors font-medium text-sm"
             >
               Reset Connection
