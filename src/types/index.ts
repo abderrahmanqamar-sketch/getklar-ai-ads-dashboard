@@ -3,8 +3,9 @@ export interface PeriodStats {
   impressions: number;
   clicks: number;
   conversions: number;
-  revenue: number;
-  roas: number;
+  grossRevenue: number;
+  netRevenue: number;
+  roas: number; // grossRevenue / spend = POAS
   ctr: number;
 }
 
@@ -14,23 +15,26 @@ export interface DailyDataPoint {
   impressions: number;
   clicks: number;
   conversions: number;
-  revenue: number;
+  grossRevenue: number; // grossRevenue/spend = POAS
+  netRevenue: number;   // netRevenue/spend  = aPOAS
   ctr: number;
   cpc: number;
   cpm: number;
-  poas: number; // revenue / spend (GetKlar attributed)
+  poas: number;  // grossRevenue / spend
+  apoas: number; // netRevenue  / spend
 }
 
 export interface Campaign {
   id: string;
   name: string;
-  platform: string; // e.g. 'meta', 'google', 'tiktok', 'unknown'
+  platform: string;
   spend: number;
   impressions: number;
   clicks: number;
   conversions: number;
-  revenue: number;
-  roas: number;
+  grossRevenue: number;
+  netRevenue: number;
+  roas: number; // POAS = grossRevenue / spend
   ctr: number;
   cpc: number;
   cpm: number;
@@ -45,6 +49,11 @@ export interface Campaign {
 }
 
 export type BucketType = 'switzerland' | 'retention' | 'newcustomer' | 'branding';
+
+export type DateRange = '7v7' | '14v14' | '30d';
+export type PlatformFilter = 'all' | 'meta' | 'google';
+export type StatusFilter = 'all' | 'active' | 'paused';
+export type SortBy = 'highest-spend' | 'lowest-poas';
 
 export const BUCKET_LABELS: Record<BucketType, string> = {
   switzerland: '🇨🇭 Switzerland',

@@ -79,38 +79,38 @@ function classifyCampaign(name: string): BucketType {
  * Build daily data points per campaign from raw API rows.
  * Each raw row has: campaignId, campaignName, date, cost, impressions, clicks, orders, netRevenue, etc.
  */
-function normalizePlatform(row: any): string {
-  // GetKlar API may expose the channel via different field names
-  const raw = (row.platform || row.channel || row.adNetwork || row.source || '').toLowerCase();
-  if (raw.includes('google') || raw.includes('gads') || raw.includes('adwords')) return 'google';
-  if (raw.includes('meta') || raw.includes('facebook') || raw.includes('instagram')) return 'meta';
-  if (raw.includes('tiktok')) return 'tiktok';
-  if (raw.includes('pinterest')) return 'pinterest';
-  if (raw) return raw;
-  // Fallback: infer from campaign name
-  const name = (row.campaignName || '').toLowerCase();
-  if (name.includes('google') || name.includes('pmax') || name.includes('search') || name.includes('shopping')) return 'google';
-  if (name.includes('meta') || name.includes('facebook') || name.includes('fb_') || name.includes('instagram')) return 'meta';
-  return 'unknown';
+const ORGANIC_CHANNELS = ['organic', 'direct', 'email', 'seo', 'referral', 'affiliate', 'social organic'];
+
+function isPaidChannel(channelName: string): boolean {
+  const lower = channelName.toLowerCase();
+  return !ORGANIC_CHANNELS.some(o => lower.includes(o));
+}
+
+function normalizePlatform(channelName: string): string {
+  const lower = channelName.toLowerCase();
+  if (lower.includes('meta') || lower.includes('facebook') || lower.includes('instagram')) return 'meta';
+  if (lower.includes('google') || lower.includes('youtube')) return 'google';
+  if (lower.includes('tiktok')) return 'tiktok';
+  if (lower.includes('pinterest')) return 'pinterest';
+  return channelName;
 }
 
 function buildDailyData(rows: any[]): Record<string, { name: string; platform: string; dailyMap: Record<string, DailyDataPoint> }> {
   const campaigns: Record<string, { name: string; platform: string; dailyMap: Record<string, DailyDataPoint> }> = {};
 
   for (const row of rows) {
+    // Skip organic / non-paid channels
+    if (!isPaidChannel(row.channelName || '')) continue;
+
     const id = String(row.campaignId || 'unknown');
-    if (id === 'unknown') continue;
+    if (id === 'unknown' || id === '0') continue;
 
     if (!campaigns[id]) {
       campaigns[id] = {
         name: row.campaignName || 'Unknown Campaign',
-        platform: normalizePlatform(row),
+        platform: normalizePlatform(row.channelName || ''),
         dailyMap: {},
       };
-    } else if (campaigns[id].platform === 'unknown') {
-      // Refine platform if we get better info from a later row
-      const p = normalizePlatform(row);
-      if (p !== 'unknown') campaigns[id].platform = p;
     }
 
     const date = row.date;
@@ -121,30 +121,34 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
         impressions: 0,
         clicks: 0,
         conversions: 0,
-        revenue: 0,
+        grossRevenue: 0,
+        netRevenue: 0,
         ctr: 0,
         cpc: 0,
         cpm: 0,
         poas: 0,
+        apoas: 0,
       };
     }
 
     const dp = campaigns[id].dailyMap[date];
-    dp.spend += row.cost || 0;
-    dp.impressions += row.impressions || 0;
-    dp.clicks += row.clicks || 0;
-    dp.conversions += row.orders || 0;
-    dp.revenue += row.netRevenue || 0;
+    dp.spend        += row.cost         || 0;
+    dp.impressions  += row.impressions  || 0;
+    dp.clicks       += row.clicks       || 0;
+    dp.conversions  += row.orders       || 0;
+    dp.grossRevenue += row.grossRevenue || 0;
+    dp.netRevenue   += row.netRevenue   || 0;
   }
 
   // Calculate derived metrics per day
   for (const campId of Object.keys(campaigns)) {
     for (const date of Object.keys(campaigns[campId].dailyMap)) {
       const dp = campaigns[campId].dailyMap[date];
-      dp.ctr = dp.impressions > 0 ? (dp.clicks / dp.impressions) * 100 : 0;
-      dp.cpc = dp.clicks > 0 ? dp.spend / dp.clicks : 0;
-      dp.cpm = dp.impressions > 0 ? (dp.spend / dp.impressions) * 1000 : 0;
-      dp.poas = dp.spend > 0 ? dp.revenue / dp.spend : 0;
+      dp.ctr   = dp.impressions > 0 ? (dp.clicks / dp.impressions) * 100 : 0;
+      dp.cpc   = dp.clicks > 0     ? dp.spend / dp.clicks : 0;
+      dp.cpm   = dp.impressions > 0 ? (dp.spend / dp.impressions) * 1000 : 0;
+      dp.poas  = dp.spend > 0      ? dp.grossRevenue / dp.spend : 0;
+      dp.apoas = dp.spend > 0      ? dp.netRevenue   / dp.spend : 0;
     }
   }
 
@@ -152,20 +156,21 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
 }
 
 function aggregateStats(dailyPoints: DailyDataPoint[]) {
-  const agg = { spend: 0, impressions: 0, clicks: 0, conversions: 0, revenue: 0 };
+  let spend = 0, impressions = 0, clicks = 0, conversions = 0, grossRevenue = 0, netRevenue = 0;
   for (const dp of dailyPoints) {
-    agg.spend += dp.spend;
-    agg.impressions += dp.impressions;
-    agg.clicks += dp.clicks;
-    agg.conversions += dp.conversions;
-    agg.revenue += dp.revenue;
+    spend        += dp.spend;
+    impressions  += dp.impressions;
+    clicks       += dp.clicks;
+    conversions  += dp.conversions;
+    grossRevenue += dp.grossRevenue;
+    netRevenue   += dp.netRevenue;
   }
   return {
-    ...agg,
-    roas: agg.spend > 0 ? agg.revenue / agg.spend : 0,
-    ctr: agg.impressions > 0 ? (agg.clicks / agg.impressions) * 100 : 0,
-    cpc: agg.clicks > 0 ? agg.spend / agg.clicks : 0,
-    cpm: agg.impressions > 0 ? (agg.spend / agg.impressions) * 1000 : 0,
+    spend, impressions, clicks, conversions, grossRevenue, netRevenue,
+    roas: spend > 0 ? grossRevenue / spend : 0, // POAS (gross)
+    ctr:  impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc:  clicks > 0 ? spend / clicks : 0,
+    cpm:  impressions > 0 ? (spend / impressions) * 1000 : 0,
   };
 }
 
@@ -232,7 +237,8 @@ export async function fetchCampaigns(refreshToken: string): Promise<Campaign[]> 
       impressions: currStats.impressions,
       clicks: currStats.clicks,
       conversions: currStats.conversions,
-      revenue: currStats.revenue,
+      grossRevenue: currStats.grossRevenue,
+      netRevenue: currStats.netRevenue,
       roas: currStats.roas,
       ctr: currStats.ctr,
       cpc: currStats.cpc,
@@ -242,11 +248,11 @@ export async function fetchCampaigns(refreshToken: string): Promise<Campaign[]> 
       period: {
         current: {
           spend: currStats.spend, impressions: currStats.impressions, clicks: currStats.clicks,
-          conversions: currStats.conversions, revenue: currStats.revenue, roas: currStats.roas, ctr: currStats.ctr
+          conversions: currStats.conversions, grossRevenue: currStats.grossRevenue, netRevenue: currStats.netRevenue, roas: currStats.roas, ctr: currStats.ctr
         },
         previous: {
           spend: prevStats.spend, impressions: prevStats.impressions, clicks: prevStats.clicks,
-          conversions: prevStats.conversions, revenue: prevStats.revenue, roas: prevStats.roas, ctr: prevStats.ctr
+          conversions: prevStats.conversions, grossRevenue: prevStats.grossRevenue, netRevenue: prevStats.netRevenue, roas: prevStats.roas, ctr: prevStats.ctr
         }
       }
     });
