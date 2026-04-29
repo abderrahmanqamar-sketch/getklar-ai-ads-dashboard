@@ -1,4 +1,4 @@
-import { Campaign, DailyDataPoint, BucketType } from '../types';
+import { Campaign, DailyDataPoint, BucketType, AttributionModel } from '../types';
 
 // Store token in memory locally to avoid re-fetching on every component mount
 let cachedAccessToken: string | null = null;
@@ -42,10 +42,11 @@ async function rateLimitedFetch(url: string, headers: Record<string, string>): P
   return response.json();
 }
 
-async function fetchAttributionPeriod(accessToken: string, startDate: Date, endDate: Date): Promise<any[]> {
+async function fetchAttributionPeriod(accessToken: string, startDate: Date, endDate: Date, model: AttributionModel): Promise<any[]> {
   const url = new URL(window.location.origin + '/api/getklar/public/attribution');
   url.searchParams.append('startDate', formatDate(startDate));
   url.searchParams.append('endDate', formatDate(endDate));
+  if (model !== 'default') url.searchParams.append('metric', model);
 
   return rateLimitedFetch(url.toString(), { 'Authorization': `Bearer ${accessToken}` });
 }
@@ -174,7 +175,7 @@ function aggregateStats(dailyPoints: DailyDataPoint[]) {
   };
 }
 
-export async function fetchCampaigns(refreshToken: string): Promise<Campaign[]> {
+export async function fetchCampaigns(refreshToken: string, model: AttributionModel = 'default'): Promise<Campaign[]> {
   if (!refreshToken) {
     throw new Error('GetKlar API Refresh Token is required');
   }
@@ -195,12 +196,12 @@ export async function fetchCampaigns(refreshToken: string): Promise<Campaign[]> 
 
   // Rate limit: 2 requests per 30 seconds
   // Auth counted as request #1, so we can do one attribution call right away
-  const currentRaw = await fetchAttributionPeriod(accessToken, currentStartDate, currentEndDate);
+  const currentRaw = await fetchAttributionPeriod(accessToken, currentStartDate, currentEndDate, model);
 
   // Wait 16 seconds before the second attribution request to respect rate limit
   await new Promise(resolve => setTimeout(resolve, 16000));
 
-  const prevRaw = await fetchAttributionPeriod(accessToken, prevStartDate, prevEndDate);
+  const prevRaw = await fetchAttributionPeriod(accessToken, prevStartDate, prevEndDate, model);
 
   // Build daily data from current period
   const currentDaily = buildDailyData(currentRaw);

@@ -54,6 +54,28 @@ export type DateRange = '7v7' | '14v14' | '30d';
 export type PlatformFilter = 'all' | 'meta' | 'google';
 export type StatusFilter = 'all' | 'active' | 'paused';
 export type SortBy = 'highest-spend' | 'lowest-poas';
+export type AttributionModel =
+  | 'default'
+  | 'data_driven'
+  | 'marketing_mix'
+  | 'last_touch'
+  | 'first_touch'
+  | 'linear'
+  | 'any_click'
+  | 'u_shape'
+  | 'time_decay';
+
+export const ATTRIBUTION_LABELS: Record<AttributionModel, string> = {
+  default:       'Default',
+  data_driven:   'Data Driven',
+  marketing_mix: 'Marketing Mix',
+  last_touch:    'Last Touch',
+  first_touch:   'First Touch',
+  linear:        'Linear',
+  any_click:     'Any Click',
+  u_shape:       'U-Shape',
+  time_decay:    'Time Decay',
+};
 
 export const BUCKET_LABELS: Record<BucketType, string> = {
   switzerland: '🇨🇭 Switzerland',

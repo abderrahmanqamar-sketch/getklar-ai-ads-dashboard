@@ -3,7 +3,7 @@ import { ApiConnect } from './components/ApiConnect';
 import { NeedsAttention } from './components/NeedsAttention';
 import { AllCampaigns } from './components/AllCampaigns';
 import { useGetKlar } from './hooks/useGetKlar';
-import { DateRange, PlatformFilter, StatusFilter, SortBy } from './types';
+import { DateRange, PlatformFilter, StatusFilter, SortBy, AttributionModel, ATTRIBUTION_LABELS } from './types';
 import { isActive, getComparisonStats } from './lib/comparison';
 import { LayoutDashboard, Lock, ChevronDown } from 'lucide-react';
 
@@ -60,7 +60,8 @@ function SortDropdown({ value, onChange }: { value: SortBy; onChange: (v: SortBy
 
 function App() {
   const [unlocked, setUnlocked] = useState(false);
-  const { campaigns, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null);
+  const [attributionModel, setAttributionModel] = useState<AttributionModel>('default');
+  const { campaigns, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null, attributionModel);
 
   const [dateRange, setDateRange] = useState<DateRange>('7v7');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
@@ -155,6 +156,22 @@ function App() {
             <div className="w-px h-5 bg-slate-700 shrink-0" />
 
             <SortDropdown value={sortBy} onChange={setSortBy} />
+
+            <div className="w-px h-5 bg-slate-700 shrink-0" />
+
+            {/* Attribution model */}
+            <div className="relative shrink-0">
+              <select
+                value={attributionModel}
+                onChange={e => setAttributionModel(e.target.value as AttributionModel)}
+                className="appearance-none bg-slate-800 border border-slate-700/60 text-slate-300 text-xs font-medium rounded-lg pl-3 pr-8 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 hover:border-slate-600 transition-colors"
+              >
+                {(Object.keys(ATTRIBUTION_LABELS) as AttributionModel[]).map(k => (
+                  <option key={k} value={k}>{ATTRIBUTION_LABELS[k]}</option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
           </div>
 
           {/* Lock */}
