@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Campaign, DateRange } from '../types';
 import { getComparisonStats, delta, isActive, RangeResult } from '../lib/comparison';
+import { aggregateByChannel } from '../lib/channels';
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
@@ -12,6 +13,13 @@ const fmtPoas = (v: number) => v.toFixed(2);
 const fmtCtr  = (v: number) => v.toFixed(2) + '%';
 const fmtCpm  = (v: number) => '€' + v.toFixed(2);
 const fmtCpc  = (v: number) => '€' + v.toFixed(2);
+
+// Compact axis formatters
+const axEuro = (v: number) => Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(1)}k` : `€${Math.round(v)}`;
+const axPoas = (v: number) => v.toFixed(2);
+const axCpm  = (v: number) => `€${v.toFixed(0)}`;
+const axCpc  = (v: number) => `€${v.toFixed(2)}`;
+const axCtr  = (v: number) => `${v.toFixed(1)}%`;
 
 // ─── Delta bar config ─────────────────────────────────────────────────────────
 
@@ -42,42 +50,50 @@ interface ChartDef {
   prevKey: string;
   color: string;
   format: (v: number) => string;
-  yKey: (d: ReturnType<typeof buildChartData>[0]) => number | null;
-  yPrevKey: (d: ReturnType<typeof buildChartData>[0]) => number | null;
+  axisFormat: (v: number) => string;
+  references?: number[]; // horizontal reference lines for orientation
 }
 
 const CHART_ROWS: ChartDef[][] = [
   [
-    { label: 'Spend',   key: 'spend',   prevKey: 'prevSpend',   color: '#f472b6', format: fmtEuro, yKey: d => d.spend,   yPrevKey: d => d.prevSpend   },
-    { label: 'Revenue', key: 'revenue', prevKey: 'prevRevenue', color: '#34d399', format: fmtEuro, yKey: d => d.revenue, yPrevKey: d => d.prevRevenue },
-    { label: 'POAS',    key: 'poas',    prevKey: 'prevPoas',    color: '#a78bfa', format: fmtPoas, yKey: d => d.poas,    yPrevKey: d => d.prevPoas    },
+    { label: 'Spend', key: 'spend', prevKey: 'prevSpend', color: '#f472b6', format: fmtEuro, axisFormat: axEuro },
+    { label: 'POAS',  key: 'poas',  prevKey: 'prevPoas',  color: '#a78bfa', format: fmtPoas, axisFormat: axPoas, references: [0.3, 0.6] },
+    { label: 'aPOAS', key: 'apoas', prevKey: 'prevApoas', color: '#34d399', format: fmtPoas, axisFormat: axPoas, references: [0.3, 0.6] },
   ],
   [
-    { label: 'CPM', key: 'cpm', prevKey: 'prevCpm', color: '#60a5fa', format: fmtCpm, yKey: d => d.cpm, yPrevKey: d => d.prevCpm },
-    { label: 'CPC', key: 'cpc', prevKey: 'prevCpc', color: '#fbbf24', format: fmtCpc, yKey: d => d.cpc, yPrevKey: d => d.prevCpc },
-    { label: 'CTR', key: 'ctr', prevKey: 'prevCtr', color: '#f87171', format: fmtCtr, yKey: d => d.ctr, yPrevKey: d => d.prevCtr },
+    { label: 'CPM', key: 'cpm', prevKey: 'prevCpm', color: '#60a5fa', format: fmtCpm, axisFormat: axCpm },
+    { label: 'CPC', key: 'cpc', prevKey: 'prevCpc', color: '#fbbf24', format: fmtCpc, axisFormat: axCpc },
+    { label: 'CTR', key: 'ctr', prevKey: 'prevCtr', color: '#f87171', format: fmtCtr, axisFormat: axCtr, references: [1.0, 2.0] },
   ],
 ];
 
 // ─── Chart data builder ───────────────────────────────────────────────────────
 
+function fmtDate(date: string) {
+  return date.slice(5).replace('-', '.');
+}
+
 function buildChartData(result: RangeResult) {
   const { currentDays, previousDays } = result;
-  return currentDays.map((day, i) => ({
-    label: day.date.slice(5).replace('-', '.'),
-    spend:   day.spend,
-    revenue: day.grossRevenue,
-    poas:    day.poas,
-    cpm:     day.cpm,
-    cpc:     day.cpc,
-    ctr:     day.ctr,
-    prevSpend:   previousDays[i]?.spend        ?? null,
-    prevRevenue: previousDays[i]?.grossRevenue ?? null,
-    prevPoas:    previousDays[i]?.poas    ?? null,
-    prevCpm:     previousDays[i]?.cpm     ?? null,
-    prevCpc:     previousDays[i]?.cpc     ?? null,
-    prevCtr:     previousDays[i]?.ctr     ?? null,
-  }));
+  return currentDays.map((day, i) => {
+    const prev = previousDays[i];
+    return {
+      label:     fmtDate(day.date),
+      prevLabel: prev ? fmtDate(prev.date) : null,
+      spend: day.spend,
+      poas:  day.poas,
+      apoas: day.apoas,
+      cpm:   day.cpm,
+      cpc:   day.cpc,
+      ctr:   day.ctr,
+      prevSpend: prev?.spend ?? null,
+      prevPoas:  prev?.poas  ?? null,
+      prevApoas: prev?.apoas ?? null,
+      prevCpm:   prev?.cpm   ?? null,
+      prevCpc:   prev?.cpc   ?? null,
+      prevCtr:   prev?.ctr   ?? null,
+    };
+  });
 }
 
 // ─── Platform badge ───────────────────────────────────────────────────────────
@@ -133,13 +149,34 @@ function DeltaBar({ result }: { result: RangeResult }) {
 
 type ChartDataPoint = ReturnType<typeof buildChartData>[0];
 
-function SmallChart({ def, data, hasPrev }: { def: ChartDef; data: ChartDataPoint[]; hasPrev: boolean }) {
-  const tooltipStyle = {
-    contentStyle: { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 11 },
-    labelStyle: { color: '#94a3b8' },
-    itemStyle: { color: '#e2e8f0' },
-  };
+function ChartTooltip({ active, payload, label, def, hasPrev }: any) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload as ChartDataPoint;
+  const cur  = (data as any)[def.key];
+  const prev = (data as any)[def.prevKey];
+  return (
+    <div className="bg-slate-900/95 border border-slate-700 rounded-md px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur-sm">
+      <div className="flex items-center gap-2">
+        <span className="inline-block w-3 h-0.5" style={{ backgroundColor: def.color }} />
+        <span className="text-slate-500">{label}</span>
+        <span className="text-slate-100 font-medium ml-auto">
+          {cur != null ? def.format(cur) : '—'}
+        </span>
+      </div>
+      {hasPrev && data.prevLabel && (
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="inline-block w-3 h-px border-t border-dashed" style={{ borderColor: def.color, opacity: 0.6 }} />
+          <span className="text-slate-500">{data.prevLabel}</span>
+          <span className="text-slate-300 ml-auto">
+            {prev != null ? def.format(prev) : '—'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
+function SmallChart({ def, data, hasPrev }: { def: ChartDef; data: ChartDataPoint[]; hasPrev: boolean }) {
   return (
     <div className="bg-slate-800/40 border border-slate-700/40 rounded-xl p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -155,27 +192,52 @@ function SmallChart({ def, data, hasPrev }: { def: ChartDef; data: ChartDataPoin
           </div>
         )}
       </div>
-      <ResponsiveContainer width="100%" height={80}>
-        <LineChart data={data} margin={{ top: 2, right: 4, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height={140}>
+        <LineChart data={data} margin={{ top: 4, right: def.references ? 32 : 8, bottom: 0, left: 0 }}>
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 9, fill: '#475569' }}
+            tick={{ fontSize: 9, fill: '#64748b' }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
+            minTickGap={20}
           />
-          <YAxis hide domain={['auto', 'auto']} />
+          <YAxis
+            tick={{ fontSize: 9, fill: '#64748b' }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={def.axisFormat}
+            width={42}
+            domain={['auto', 'auto']}
+          />
           <Tooltip
-            {...tooltipStyle}
-            formatter={(value) => [def.format(typeof value === 'number' ? value : 0)]}
+            content={(props: any) => <ChartTooltip {...props} def={def} hasPrev={hasPrev} />}
+            cursor={{ stroke: '#475569', strokeWidth: 1, strokeDasharray: '3 3' }}
           />
+          {def.references?.map(v => (
+            <ReferenceLine
+              key={v}
+              y={v}
+              stroke="#cbd5e1"
+              strokeDasharray="4 3"
+              strokeOpacity={0.55}
+              strokeWidth={1.25}
+              label={{
+                value: def.axisFormat(v),
+                position: 'right',
+                fill: '#cbd5e1',
+                fontSize: 9,
+                fontWeight: 600,
+              }}
+            />
+          ))}
           <Line
             type="monotone"
             dataKey={def.key}
             stroke={def.color}
-            strokeWidth={1.5}
+            strokeWidth={1.75}
             dot={false}
-            activeDot={{ r: 3, fill: def.color }}
+            activeDot={{ r: 3.5, fill: def.color, stroke: '#0f172a', strokeWidth: 1.5 }}
             connectNulls
           />
           {hasPrev && (
@@ -185,7 +247,7 @@ function SmallChart({ def, data, hasPrev }: { def: ChartDef; data: ChartDataPoin
               stroke={def.color}
               strokeWidth={1.5}
               strokeDasharray="4 3"
-              strokeOpacity={0.45}
+              strokeOpacity={0.4}
               dot={false}
               activeDot={false}
               connectNulls
@@ -240,18 +302,30 @@ function CampaignRow({
   expanded,
   onToggle,
   rowRef,
+  isChannel = false,
 }: {
   campaign: Campaign;
   dateRange: DateRange;
   expanded: boolean;
   onToggle: () => void;
   rowRef?: React.RefObject<HTMLDivElement>;
+  isChannel?: boolean;
 }) {
   const result  = getComparisonStats(campaign, dateRange);
   const active  = isActive(campaign);
-  const poasDelta = delta(result.current.roas, result.previous.roas);
-  const poasSign  = poasDelta > 0 ? '+' : '';
-  const poasClr   = poasDelta > 0 ? 'text-emerald-400' : poasDelta < 0 ? 'text-red-400' : 'text-slate-500';
+
+  const deltaInfo = (cur: number, prev: number) => {
+    const d = delta(cur, prev);
+    return {
+      sign: d > 0 ? '+' : '',
+      pct: d.toFixed(0),
+      clr: d > 0 ? 'text-emerald-400' : d < 0 ? 'text-red-400' : 'text-slate-500',
+    };
+  };
+
+  const roasInfo   = deltaInfo(result.current.roas,   result.previous.roas);
+  const apoasInfo  = deltaInfo(result.current.apoas,  result.previous.apoas);
+  const nkRoasInfo = deltaInfo(result.current.nkRoas, result.previous.nkRoas);
 
   return (
     <div ref={rowRef}>
@@ -271,9 +345,9 @@ function CampaignRow({
         {/* Status dot */}
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400' : 'bg-slate-600'}`} />
 
-        <PlatformBadge platform={campaign.platform} />
+        {!isChannel && <PlatformBadge platform={campaign.platform} />}
 
-        <span className="text-sm font-medium text-slate-200 truncate flex-1 text-left">
+        <span className={`text-sm font-medium truncate flex-1 text-left ${isChannel ? 'text-white' : 'text-slate-200'}`}>
           {campaign.name}
         </span>
 
@@ -285,9 +359,23 @@ function CampaignRow({
           </div>
           <div className="text-right">
             <div className="text-slate-400">ROAS</div>
-            <div className={`font-semibold ${poasClr}`}>
+            <div className={`font-semibold ${roasInfo.clr}`}>
               {fmtPoas(result.current.roas)}
-              <span className="text-[10px] ml-1 opacity-80">({poasSign}{poasDelta.toFixed(0)}%)</span>
+              <span className="text-[10px] ml-1 opacity-80">({roasInfo.sign}{roasInfo.pct}%)</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-slate-400">aPOAS</div>
+            <div className={`font-semibold ${apoasInfo.clr}`}>
+              {fmtPoas(result.current.apoas)}
+              <span className="text-[10px] ml-1 opacity-80">({apoasInfo.sign}{apoasInfo.pct}%)</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-slate-400">NK ROAS</div>
+            <div className={`font-semibold ${nkRoasInfo.clr}`}>
+              {fmtPoas(result.current.nkRoas)}
+              <span className="text-[10px] ml-1 opacity-80">({nkRoasInfo.sign}{nkRoasInfo.pct}%)</span>
             </div>
           </div>
           <div className="text-right">
@@ -310,20 +398,27 @@ interface Props {
   focusCampaignId: string | null;
 }
 
+type View = 'campaigns' | 'channels';
+
 export function AllCampaigns({ campaigns, dateRange, focusCampaignId }: Props) {
+  const [view, setView] = useState<View>('campaigns');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const rowRefs = useRef<Record<string, React.RefObject<HTMLDivElement>>>({});
 
-  // Ensure refs exist for all campaigns
-  campaigns.forEach(c => {
+  const channels = useMemo(() => aggregateByChannel(campaigns), [campaigns]);
+  const items = view === 'campaigns' ? campaigns : channels;
+
+  // Ensure refs exist for all items
+  items.forEach(c => {
     if (!rowRefs.current[c.id]) {
       rowRefs.current[c.id] = { current: null } as unknown as React.RefObject<HTMLDivElement>;
     }
   });
 
-  // Auto-expand and scroll when focusCampaignId changes
+  // Auto-expand and scroll when focusCampaignId changes; switch to campaigns view
   useEffect(() => {
     if (!focusCampaignId) return;
+    setView('campaigns');
     setExpandedIds(prev => new Set([...prev, focusCampaignId]));
     setTimeout(() => {
       rowRefs.current[focusCampaignId]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -338,15 +433,41 @@ export function AllCampaigns({ campaigns, dateRange, focusCampaignId }: Props) {
     });
   };
 
+  const isChannels = view === 'channels';
+
   return (
     <section>
-      <div className="flex items-center gap-3 mb-3">
-        <h2 className="text-base font-semibold text-white">All Campaigns</h2>
-        <span className="text-xs text-slate-600">{campaigns.length} campaigns</span>
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <h2 className="text-base font-semibold text-white">
+          All {isChannels ? 'Channels' : 'Campaigns'}
+        </h2>
+        <span className="text-xs text-slate-600">
+          {items.length} {isChannels ? 'channels' : 'campaigns'}
+        </span>
+
+        {/* View toggle */}
+        <div className="ml-auto flex bg-slate-800 rounded-lg p-0.5 border border-slate-700/60 gap-0.5">
+          <button
+            onClick={() => setView('campaigns')}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              view === 'campaigns' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Campaigns
+          </button>
+          <button
+            onClick={() => setView('channels')}
+            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+              view === 'channels' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Channels
+          </button>
+        </div>
       </div>
 
       <div className="space-y-1.5">
-        {campaigns.map(c => (
+        {items.map(c => (
           <CampaignRow
             key={c.id}
             campaign={c}
@@ -354,10 +475,13 @@ export function AllCampaigns({ campaigns, dateRange, focusCampaignId }: Props) {
             expanded={expandedIds.has(c.id)}
             onToggle={() => toggle(c.id)}
             rowRef={rowRefs.current[c.id]}
+            isChannel={isChannels}
           />
         ))}
-        {campaigns.length === 0 && (
-          <p className="text-center text-slate-600 text-sm py-10">No campaigns match the current filters.</p>
+        {items.length === 0 && (
+          <p className="text-center text-slate-600 text-sm py-10">
+            No {isChannels ? 'channels' : 'campaigns'} match the current filters.
+          </p>
         )}
       </div>
     </section>

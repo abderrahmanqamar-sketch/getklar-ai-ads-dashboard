@@ -5,6 +5,7 @@ export interface PeriodStats {
   conversions: number;
   grossRevenue: number;
   netRevenue: number;
+  ncNetRevenue: number;
   cm2: number;
   acm2: number;
   roas: number; // netRevenue / spend
@@ -19,26 +20,30 @@ export interface DailyDataPoint {
   conversions: number;
   grossRevenue: number;
   netRevenue: number;   // = ROAS numerator (attributed revenue)
+  ncNetRevenue: number; // New-customer net revenue = NK-ROAS numerator
   cm2: number;          // Contribution Margin 2 = POAS numerator
   acm2: number;         // Attributed CM2       = aPOAS numerator
   ctr: number;
   cpc: number;
   cpm: number;
-  roas: number;  // netRevenue  / spend
-  poas: number;  // cm2         / spend
-  apoas: number; // acm2        / spend
+  roas: number;   // netRevenue   / spend
+  nkRoas: number; // ncNetRevenue / spend
+  poas: number;   // cm2          / spend
+  apoas: number;  // acm2         / spend
 }
 
 export interface Campaign {
   id: string;
   name: string;
-  platform: string;
+  platform: string;     // normalized: 'meta', 'google', etc.
+  channelName: string;  // original GetKlar channel (e.g. "Meta Paid", "Google PMAX")
   spend: number;
   impressions: number;
   clicks: number;
   conversions: number;
   grossRevenue: number;
   netRevenue: number;
+  ncNetRevenue: number;
   cm2: number;
   acm2: number;
   roas: number; // netRevenue / spend

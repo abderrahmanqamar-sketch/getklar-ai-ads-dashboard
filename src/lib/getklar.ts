@@ -105,8 +105,10 @@ function normalizePlatform(channelName: string): string {
   return channelName;
 }
 
-function buildDailyData(rows: any[]): Record<string, { name: string; platform: string; dailyMap: Record<string, DailyDataPoint> }> {
-  const campaigns: Record<string, { name: string; platform: string; dailyMap: Record<string, DailyDataPoint> }> = {};
+type CampaignAccum = { name: string; platform: string; channelName: string; dailyMap: Record<string, DailyDataPoint> };
+
+function buildDailyData(rows: any[]): Record<string, CampaignAccum> {
+  const campaigns: Record<string, CampaignAccum> = {};
 
   for (const row of rows) {
     // Skip organic / non-paid channels
@@ -119,6 +121,7 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
       campaigns[id] = {
         name: row.campaignName || 'Unknown Campaign',
         platform: normalizePlatform(row.channelName || ''),
+        channelName: row.channelName || 'Unknown',
         dailyMap: {},
       };
     }
@@ -128,32 +131,34 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
       campaigns[id].dailyMap[date] = {
         date,
         spend: 0, impressions: 0, clicks: 0, conversions: 0,
-        grossRevenue: 0, netRevenue: 0, cm2: 0, acm2: 0,
-        ctr: 0, cpc: 0, cpm: 0, roas: 0, poas: 0, apoas: 0,
+        grossRevenue: 0, netRevenue: 0, ncNetRevenue: 0, cm2: 0, acm2: 0,
+        ctr: 0, cpc: 0, cpm: 0, roas: 0, nkRoas: 0, poas: 0, apoas: 0,
       };
     }
 
     const dp = campaigns[id].dailyMap[date];
-    dp.spend        += row.cost         || 0;
-    dp.impressions  += row.impressions  || 0;
-    dp.clicks       += row.clicks       || 0;
-    dp.conversions  += row.orders       || 0;
-    dp.grossRevenue += row.grossRevenue || 0;
-    dp.netRevenue   += row.netRevenue   || 0;
-    dp.cm2          += row.cm2          || 0;
-    dp.acm2         += row.acm2         || 0;
+    dp.spend         += row.cost          || 0;
+    dp.impressions   += row.impressions   || 0;
+    dp.clicks        += row.clicks        || 0;
+    dp.conversions   += row.orders        || 0;
+    dp.grossRevenue  += row.grossRevenue  || 0;
+    dp.netRevenue    += row.netRevenue    || 0;
+    dp.ncNetRevenue  += row.ncNetRevenue  || 0;
+    dp.cm2           += row.cm2           || 0;
+    dp.acm2          += row.acm2          || 0;
   }
 
   // Calculate derived metrics per day
   for (const campId of Object.keys(campaigns)) {
     for (const date of Object.keys(campaigns[campId].dailyMap)) {
       const dp = campaigns[campId].dailyMap[date];
-      dp.ctr   = dp.impressions > 0 ? (dp.clicks / dp.impressions) * 100 : 0;
-      dp.cpc   = dp.clicks > 0      ? dp.spend / dp.clicks : 0;
-      dp.cpm   = dp.impressions > 0 ? (dp.spend / dp.impressions) * 1000 : 0;
-      dp.roas  = dp.spend > 0       ? dp.netRevenue / dp.spend : 0;
-      dp.poas  = dp.spend > 0       ? dp.cm2        / dp.spend : 0;
-      dp.apoas = dp.spend > 0       ? dp.acm2       / dp.spend : 0;
+      dp.ctr    = dp.impressions > 0 ? (dp.clicks / dp.impressions) * 100 : 0;
+      dp.cpc    = dp.clicks > 0      ? dp.spend / dp.clicks : 0;
+      dp.cpm    = dp.impressions > 0 ? (dp.spend / dp.impressions) * 1000 : 0;
+      dp.roas   = dp.spend > 0       ? dp.netRevenue   / dp.spend : 0;
+      dp.nkRoas = dp.spend > 0       ? dp.ncNetRevenue / dp.spend : 0;
+      dp.poas   = dp.spend > 0       ? dp.cm2          / dp.spend : 0;
+      dp.apoas  = dp.spend > 0       ? dp.acm2         / dp.spend : 0;
     }
   }
 
@@ -162,19 +167,20 @@ function buildDailyData(rows: any[]): Record<string, { name: string; platform: s
 
 function aggregateStats(dailyPoints: DailyDataPoint[]) {
   let spend = 0, impressions = 0, clicks = 0, conversions = 0;
-  let grossRevenue = 0, netRevenue = 0, cm2 = 0, acm2 = 0;
+  let grossRevenue = 0, netRevenue = 0, ncNetRevenue = 0, cm2 = 0, acm2 = 0;
   for (const dp of dailyPoints) {
-    spend        += dp.spend;
-    impressions  += dp.impressions;
-    clicks       += dp.clicks;
-    conversions  += dp.conversions;
-    grossRevenue += dp.grossRevenue;
-    netRevenue   += dp.netRevenue;
-    cm2          += dp.cm2;
-    acm2         += dp.acm2;
+    spend         += dp.spend;
+    impressions   += dp.impressions;
+    clicks        += dp.clicks;
+    conversions   += dp.conversions;
+    grossRevenue  += dp.grossRevenue;
+    netRevenue    += dp.netRevenue;
+    ncNetRevenue  += dp.ncNetRevenue;
+    cm2           += dp.cm2;
+    acm2          += dp.acm2;
   }
   return {
-    spend, impressions, clicks, conversions, grossRevenue, netRevenue, cm2, acm2,
+    spend, impressions, clicks, conversions, grossRevenue, netRevenue, ncNetRevenue, cm2, acm2,
     roas: spend > 0 ? netRevenue / spend : 0,
     ctr:  impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc:  clicks > 0 ? spend / clicks : 0,
@@ -241,17 +247,20 @@ export async function fetchCampaigns(
     const prevStats = aggregateStats(prevPoints);
 
     const platform = currCamp?.platform || prevCamp?.platform || 'unknown';
+    const channelName = currCamp?.channelName || prevCamp?.channelName || 'Unknown';
 
     campaigns.push({
       id,
       name,
       platform,
+      channelName,
       spend: currStats.spend,
       impressions: currStats.impressions,
       clicks: currStats.clicks,
       conversions: currStats.conversions,
       grossRevenue: currStats.grossRevenue,
       netRevenue: currStats.netRevenue,
+      ncNetRevenue: currStats.ncNetRevenue,
       cm2: currStats.cm2,
       acm2: currStats.acm2,
       roas: currStats.roas,
@@ -264,12 +273,14 @@ export async function fetchCampaigns(
         current: {
           spend: currStats.spend, impressions: currStats.impressions, clicks: currStats.clicks,
           conversions: currStats.conversions, grossRevenue: currStats.grossRevenue, netRevenue: currStats.netRevenue,
-          cm2: currStats.cm2, acm2: currStats.acm2, roas: currStats.roas, ctr: currStats.ctr,
+          ncNetRevenue: currStats.ncNetRevenue, cm2: currStats.cm2, acm2: currStats.acm2,
+          roas: currStats.roas, ctr: currStats.ctr,
         },
         previous: {
           spend: prevStats.spend, impressions: prevStats.impressions, clicks: prevStats.clicks,
           conversions: prevStats.conversions, grossRevenue: prevStats.grossRevenue, netRevenue: prevStats.netRevenue,
-          cm2: prevStats.cm2, acm2: prevStats.acm2, roas: prevStats.roas, ctr: prevStats.ctr,
+          ncNetRevenue: prevStats.ncNetRevenue, cm2: prevStats.cm2, acm2: prevStats.acm2,
+          roas: prevStats.roas, ctr: prevStats.ctr,
         }
       }
     });

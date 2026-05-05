@@ -60,7 +60,7 @@ function SortDropdown({ value, onChange }: { value: SortBy; onChange: (v: SortBy
 
 function App() {
   const [unlocked, setUnlocked] = useState(false);
-  const [attributionModel, setAttributionModel] = useState<AttributionModel>('default');
+  const [attributionModel, setAttributionModel] = useState<AttributionModel>('data_driven');
   const [attrWindow, setAttrWindow] = useState<AttributionWindow>('unlimited');
   const [dateBreakdown, setDateBreakdown] = useState<DateBreakdown>('order');
   const { campaigns, loading, error } = useGetKlar(unlocked ? GETKLAR_TOKEN : null, attributionModel, attrWindow, dateBreakdown);
