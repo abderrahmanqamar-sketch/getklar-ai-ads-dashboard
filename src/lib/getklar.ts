@@ -76,8 +76,8 @@ function classifyCampaign(name: string): BucketType {
     return 'retention';
   }
 
-  // Branding campaigns
-  if (lower.includes('branding') || lower.includes('brand awareness')) {
+  // Branding campaigns — exclude CLS_Branding (conversion campaigns despite the name)
+  if ((lower.includes('branding') || lower.includes('brand awareness')) && !lower.includes('cls_branding')) {
     return 'branding';
   }
 
